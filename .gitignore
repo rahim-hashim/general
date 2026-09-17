@@ -180,3 +180,9 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 plotting/source/NMAH-ET2014-41022.jpg
+
+# macOS
+.DS_Store
+
+# Large media kept locally, not in git history
+plotting/source/m2-res_1080p.mp4

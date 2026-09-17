@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fts_query"
+version = "0.1.0"
+description = "User-friendly query → SQLite FTS5 MATCH expression"
+requires-python = ">=3.9"
+authors = [{name = "Rahim Hashim"}]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[tool.setuptools.packages.find]
+include = ["fts_query*"]
+exclude = ["tests*"]
