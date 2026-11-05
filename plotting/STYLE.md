@@ -65,6 +65,12 @@ Top to bottom, left-aligned to one margin (x = 0.04 of figure width):
 - **A unit written once.** Put it on the axis label, or on the top tick only
   ("$80 billion", B2), never on every tick.
 - **Publisher-style mark** (if any) goes bottom-right, on the source line's baseline (E2).
+- **The bottom block is never wider than the plot.** Wrap its lines (continuations
+  indented) so the longest ends at the right edge of the plotted content — axes,
+  colorbars, legends — measured on the render. Text that runs past the content
+  is the widest thing on the canvas, so a tight-bbox save widens the whole figure
+  to fit it and the plot ends up off-centre in white space. The title obeys the
+  same limit.
 
 ## 3. Color
 
@@ -134,14 +140,43 @@ All gaps come from one scale, in points: `SP = {xs: 2, s: 4, m: 8, l: 12, xl: 18
 | Between panels (gutter) | `xxl` 28 pt, or the widest tick label + `l`, whichever is larger |
 | Plot bottom (x-axis label) → bottom block | `xl` 18 pt |
 | Figure edge → any ink | 0.04 of figure width |
+| Bottom block / title right edge | ≤ right edge of the plotted content (axes + colorbars + legends) |
 | Table row height | ≥ 1.8 × body font size |
+
+**Wrap figure text to the content, not to the canvas.** Character-count wrapping
+(`textwrap` at an assumed em width) runs long for proportional fonts and ignores
+right-hand margins, so a footer computed that way overhangs the plot. Measure
+instead: take the union of the axes' tight bboxes (tick labels, colorbars, legends
+included), then wrap each line word by word against the renderer's text width
+until it fits (`bottom_block` in `examples/make_examples.py`). Do it after the
+layout is final.
 
 **Reserve space before drawing, don't squeeze afterwards.** Set the axes rectangle
 explicitly (`fig.add_axes([l, b, w, h])`), with a right margin wide enough for direct
 labels and a top band for the legend. `tight_layout` / `constrained_layout` don't
 know about annotations placed with offsets, so they will pack text into your gaps.
 
-**Crowding fixes, in order of preference:**
+**Ticks: integers wherever the quantity allows** (2026-10-26). Labels like 2.5 /
+7.5 / 12.5 on a count axis are noise.
+- Any count axis (electrodes, factors, dimensions, trials, sessions) gets integer
+  ticks.
+- So does any axis spanning four or more units.
+- Every label uses the fewest decimals that represent it: `0`, `0.2`, `12`, never
+  `0.0`, `0.20` or `-0`.
+- Fractional ticks stay only where the quantity is fractional and narrow (bits,
+  correlations, R² below ~4 units).
+- In the NHP1 repo, `style.integer_ticks(ax)` sets this, and `style.save` applies it
+  automatically (`tidy_ticks`) to axes left on matplotlib's default locator.
+
+**Colorbars are exactly as tall as the plot they label** (2026-10-26). A colorbar
+taller than its axes runs into the panel title and widens nothing useful.
+- Give the colorbar its own axes of the plot's height, beside it (NHP1:
+  `style.matched_colorbar(fig, ax, mappable)`).
+- Never use `fig.colorbar(..., ax=...)` with a default `fraction` / `shrink` next to a
+  short panel.
+- Keep its label short; a long label pushes into the next panel's tick labels.
+
+
 
 1. Long category labels → **horizontal bars** so labels read left to right (fixes B7,
    D5, S3, S4). **Never rotate tick labels.** 45° text is the most common crowding
@@ -183,7 +218,21 @@ Rules for any legend:
 - No redundant legend: if the x-ticks already name the groups, drop it (D1).
 - No frame, and no title unless the variable name isn't obvious (N5 "Value").
 
-**Point and annotation labels:**
+**Notes inside the axes never sit on data** (2026-10-26). An n, a summary or a
+"90 % with …" note drawn over points, curves or a reference line (a zero line, a
+chance line) hides the data it describes.
+- Put the note in an inside corner that is empty on the render (NHP1:
+  `style.corner_note(ax, text)` picks the corner covering the fewest plotted points).
+- Better still, move a panel summary into the panel title.
+- NHP1's `style.save` warns `note over plotted data`.
+
+**Every row label names one thing.** In a dot plot or table, a variable that appears
+under two conditions (e.g. two analyses of the same readout) must carry the condition
+in its label, or the panel shows one condition only. Name the measurement concretely
+(`device · finger force (load cell)`, `body · right-hand speed`), and define the
+variables in the bottom block.
+
+
 
 - Label a **subset**: the highlight, the extremes, the ones the text mentions. Labeling
   everything guarantees collisions (S2, S7, L15).
@@ -322,8 +371,18 @@ Check it against the **rendered PNG**, not against the code.
 - [ ] Opened the PNG and looked at it at 100% zoom.
 - [ ] Title states the claim; its number is computed from the plotted data.
 - [ ] No subtitle; the bottom block has source, descriptive line, and notes where needed.
+- [ ] No line of the bottom block (or the title) extends past the plot's right edge;
+      the figure is no wider than its content (`check_text_overlap` reports
+      `wider than plot`).
 - [ ] Every axis labeled, mono, uppercase, with units.
 - [ ] No rotated tick labels; nothing below 8 pt; no italic.
+- [ ] Integer tick labels on count axes and any axis spanning >= 4 units; no
+      `0.0` / `0.20` style labels.
+- [ ] Every colorbar is exactly as tall as its plot and clears the title and the
+      next panel.
+- [ ] No in-axes note on data or on a reference line; summaries in the title where
+      possible.
+- [ ] Every row label in a dot plot or table is unique and names the measurement.
 - [ ] Legend follows the §6 order; no entry split across lines; no `loc="best"`.
 - [ ] Every gap meets §5; the gutters between panels look even.
 - [ ] Variance shown or its absence explained; n on every panel.

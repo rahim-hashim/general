@@ -72,11 +72,48 @@ def title(fig, text, y=0.975):
              family=TITLE_FONT, weight="bold", color=INK)
 
 
-def bottom_block(fig, source, description, notes=None, y=0.02):
-    """Source line, then descriptive line, then optional notes; bottom-left."""
-    lines = [source, description] + ([notes] if notes else [])
+def content_right(fig):
+    """Right edge of the plotted content (axes incl. tick labels, colorbars,
+    legends), as a figure fraction -- everything except figure-level text."""
+    fig.canvas.draw()
+    r = fig.canvas.get_renderer()
+    boxes = [ax.get_tightbbox(r) for ax in fig.axes if ax.get_visible()]
+    boxes += [leg.get_window_extent(r) for leg in fig.legends]
+    W = fig.get_figwidth() * fig.dpi
+    return max(b.x1 for b in boxes) / W if boxes else 0.96
+
+
+def wrap_measured(fig, text, width_frac, size, family, indent="    "):
+    """Word-wrap `text` so each rendered line fits `width_frac` of the figure.
+    Measured on the renderer: character-count wrapping overhangs the plot."""
+    from matplotlib.font_manager import FontProperties
+    r = fig.canvas.get_renderer()
+    fp = FontProperties(size=size, family=family)
+    limit = width_frac * fig.get_figwidth() * fig.dpi
+    width = lambda s: r.get_text_width_height_descent(s, fp, ismath=False)[0]
+    words, out = text.split(), []
+    cur = words[0] if words else ""
+    for w in words[1:]:
+        if width(f"{cur} {w}") <= limit:
+            cur = f"{cur} {w}"
+        else:
+            out.append(cur)
+            cur = indent + w
+    return out + [cur]
+
+
+def bottom_block(fig, source, description, notes=None, y=0.02, x=0.04):
+    """Source line, then descriptive line, then optional notes; bottom-left.
+
+    Each line wraps at the right edge of the plotted content (never past it),
+    so the bottom block cannot widen the saved figure. Call after layout.
+    """
+    width = max(content_right(fig) - x, 0.40)
+    lines = []
+    for raw in [source, description] + ([notes] if notes else []):
+        lines += wrap_measured(fig, raw, width, 8.5, PROSE_FONT)
     for i, line in enumerate(reversed(lines)):
-        fig.text(0.04, y + i * 0.028, line, ha="left", va="bottom",
+        fig.text(x, y + i * 0.028, line, ha="left", va="bottom",
                  fontsize=8.5, family=PROSE_FONT, color=MUTED)
 
 
@@ -141,9 +178,14 @@ def check_text_overlap(fig, pad_px=1.0):
     boxes = [(t, t.get_window_extent(r)) for t in texts]
     W, H = fig.canvas.get_width_height()
     problems = []
+    right = content_right(fig) * W
     for t, b in boxes:
         if b.x0 < 0 or b.y0 < 0 or b.x1 > W or b.y1 > H:
             problems.append(f"off-canvas: {t.get_text()!r}")
+        # Figure-level text (title, bottom block) must end inside the plot's
+        # right edge, or a tight-bbox save widens the figure to fit it.
+        if t in fig.texts and b.x1 > right + 2:
+            problems.append(f"wider than plot: {t.get_text()[:40]!r}")
     for i in range(len(boxes)):
         for j in range(i + 1, len(boxes)):
             a, b = boxes[i][1], boxes[j][1]
